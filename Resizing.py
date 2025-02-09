@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-from sklearn.metrics import confusion_matrix, f1_score
+from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
 import numpy as np
 
 # Define paths for training and test data
@@ -31,7 +31,7 @@ test_transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225])
 ])
 
-# Load datasets using ImageFolder (expects subfolders "apple" and "tomato")
+# Load datasets dynamically using ImageFolder
 train_dataset = datasets.ImageFolder(root=train_dir, transform=train_transform)
 test_dataset = datasets.ImageFolder(root=test_dir, transform=test_transform)
 
@@ -39,31 +39,27 @@ test_dataset = datasets.ImageFolder(root=test_dir, transform=test_transform)
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-
-# Define a simple CNN for binary classification (apple vs. tomato)
+# Define a simple CNN
 class SimpleCNN(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes):
         super(SimpleCNN, self).__init__()
-        # First convolution: 3 channels (RGB) -> 16 channels
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(2, 2)
-        # Second convolution: 16 -> 32 channels
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-        # After two poolings, the spatial dimensions reduce from 224 to 56 (224/2/2)
         self.fc1 = nn.Linear(32 * 56 * 56, 128)
-        self.fc2 = nn.Linear(128, 2)  # 2 output classes: apple and tomato
+        self.fc2 = nn.Linear(128, num_classes)
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))  # Conv1 + ReLU + Pooling
-        x = self.pool(F.relu(self.conv2(x)))  # Conv2 + ReLU + Pooling
-        x = x.view(x.size(0), -1)  # Flatten for the fully connected layers
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
 
-
-# Initialize the model and move it to the selected device
-model = SimpleCNN().to(device)
+# Dynamically get number of classes
+num_classes = len(train_dataset.classes)
+model = SimpleCNN(num_classes=num_classes).to(device)
 
 # Define loss function and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -72,26 +68,24 @@ optimizer = optim.Adam(model.parameters(), lr=0.001)
 # Training Loop
 num_epochs = 5
 for epoch in range(num_epochs):
-    model.train()  # Set model to training mode
+    model.train()
     running_loss = 0.0
     for i, (inputs, labels) in enumerate(train_loader):
         inputs, labels = inputs.to(device), labels.to(device)
-
-        optimizer.zero_grad()  # Zero the parameter gradients
-        outputs = model(inputs)  # Forward pass
+        optimizer.zero_grad()
+        outputs = model(inputs)
         loss = criterion(outputs, labels)
-        loss.backward()  # Backward pass
-        optimizer.step()  # Update weights
-
+        loss.backward()
+        optimizer.step()
         running_loss += loss.item()
-        if (i + 1) % 20 == 0:  # Print every 20 batches
+        if (i + 1) % 20 == 0:
             print(f"Epoch [{epoch + 1}/{num_epochs}], Batch [{i + 1}], Loss: {running_loss / 20:.3f}")
             running_loss = 0.0
 
 print("Finished Training!")
 
-# Evaluation on the Test Set and Collect Predictions
-model.eval()  # Set model to evaluation mode
+# Evaluation
+model.eval()
 all_labels = []
 all_preds = []
 with torch.no_grad():
@@ -102,21 +96,12 @@ with torch.no_grad():
         all_labels.extend(labels.cpu().numpy())
         all_preds.extend(predicted.cpu().numpy())
 
-# Calculate the confusion matrix and F1 score
+# Compute metrics
+accuracy = accuracy_score(all_labels, all_preds)
 cm = confusion_matrix(all_labels, all_preds)
-f1 = f1_score(all_labels, all_preds, average='weighted')  # 'weighted' accounts for label imbalance if any
+f1 = f1_score(all_labels, all_preds, average='weighted')
 
-# For binary classification, you can also extract TN, FP, FN, TP if the confusion matrix is 2x2
-if cm.shape == (2, 2):
-    tn, fp, fn, tp = cm.ravel()
-    print("Confusion Matrix:")
-    print(cm)
-    print(f"True Negatives (TN): {tn}")
-    print(f"False Positives (FP): {fp}")
-    print(f"False Negatives (FN): {fn}")
-    print(f"True Positives (TP): {tp}")
-else:
-    print("Confusion Matrix (multiclass):")
-    print(cm)
-
+print(f"Accuracy: {accuracy:.2f}")
 print(f"F1 Score: {f1:.2f}")
+print("Confusion Matrix:")
+print(cm)
