@@ -100,7 +100,8 @@ with torch.no_grad():
 accuracy = accuracy_score(all_labels, all_preds)
 cm = confusion_matrix(all_labels, all_preds)
 f1 = f1_score(all_labels, all_preds, average='weighted')
-
+torch.save(model.state_dict(), "apple_tomato_classifier.pth")
+print("Model saved successfully")
 print(f"Accuracy: {accuracy:.2f}")
 print(f"F1 Score: {f1:.2f}")
 print("Confusion Matrix:")
