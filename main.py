@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from PIL.Image import Image
+from torchvision.transforms import transforms
+
 
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes):
@@ -36,6 +39,14 @@ transform = transforms.Compose([
 ])
 
 # Load and preprocess the image
-image = Image.open('path_to_your_image.jpg')
+image_path = 'appleTesting.jpeg'
+image = Image.open(image_path).convert("RGB")
 input_tensor = transform(image)
-input_tensor = input_tensor.unsqueeze(0)  # Add batch dimension
+input_tensor = input_tensor.unsqueeze(0) # Add batch dimension
+with torch.no_grad():
+    output=model(input_tensor)
+    probabilities=F.softmax(output,dim=1)
+    predicted_class=torch.argmax(probabilities).item()
+
+class_labels=["Apple","Tomato"]
+print(f"Predicted: {class_labels[predicted_class]} (Confidence: {probabilities[0][predicted_class].item():.4f})")
